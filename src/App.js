@@ -4,21 +4,130 @@ import './index.css';
 function App() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [feedback, setFeedback] = useState('');
   const [confirmationSent, setConfirmationSent] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Form data states for confirmation
+  const [confirmData, setConfirmData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    message: ''
+  });
+  
+  // Form data states for suggestions
+  const [suggestData, setSuggestData] = useState({
+    name: '',
+    phone: '',
+    suggestedDate: '',
+    duration: '',
+    activities: '',
+    budget: ''
+  });
 
-  const handleConfirm = () => {
-    setConfirmationSent(true);
-    setShowConfirmModal(false);
-    setTimeout(() => setConfirmationSent(false), 3000);
+  // Google Apps Script Web App URL - Replace with your actual URL
+  const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyUm6yNoO8uoXfqJju52OkuGyTPBHPQnBfbsQE8CIPR106WA7EqpA3E5FgNjq1uxvDx/exec';
+
+  const handleConfirm = async () => {
+    if (!confirmData.name || !confirmData.phone) {
+      alert('Vui lòng điền đầy đủ họ tên và số điện thoại!');
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      const dataToSend = {
+        type: 'confirm',
+        timestamp: new Date().toISOString(),
+        ...confirmData
+      };
+
+      const response = await fetch(GAS_WEB_APP_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataToSend)
+      });
+
+      const result = await response.json();
+      
+      if (result.result === 'success') {
+        setConfirmationSent(true);
+        setShowConfirmModal(false);
+        setConfirmData({ name: '', phone: '', email: '', message: '' });
+        setTimeout(() => setConfirmationSent(false), 5000);
+      } else {
+        throw new Error(result.error || 'Có lỗi xảy ra');
+      }
+    } catch (error) {
+      console.error('Error submitting confirmation:', error);
+      alert('Có lỗi xảy ra khi gửi xác nhận. Vui lòng thử lại!');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleFeedbackSubmit = () => {
-    // Here you would typically send the feedback to a server
-    console.log('Feedback submitted:', feedback);
-    setShowFeedbackModal(false);
-    setFeedback('');
-    alert('Cảm ơn góp ý của bạn! 🙏');
+  const handleFeedbackSubmit = async () => {
+    if (!suggestData.name || !suggestData.phone || !suggestData.suggestedDate) {
+      alert('Vui lòng điền đầy đủ họ tên, số điện thoại và ngày đề xuất!');
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      const dataToSend = {
+        type: 'suggest',
+        timestamp: new Date().toISOString(),
+        ...suggestData
+      };
+
+      const response = await fetch(GAS_WEB_APP_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataToSend)
+      });
+
+      const result = await response.json();
+      
+      if (result.result === 'success') {
+        setShowFeedbackModal(false);
+        setSuggestData({
+          name: '',
+          phone: '',
+          suggestedDate: '',
+          duration: '',
+          activities: '',
+          budget: ''
+        });
+        alert('Cảm ơn góp ý của bạn! Đã được lưu vào hệ thống 🙏');
+      } else {
+        throw new Error(result.error || 'Có lỗi xảy ra');
+      }
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      alert('Có lỗi xảy ra khi gửi góp ý. Vui lòng thử lại!');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmDataChange = (field, value) => {
+    setConfirmData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSuggestDataChange = (field, value) => {
+    setSuggestData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   return (
@@ -92,12 +201,14 @@ function App() {
               <button 
                 className="btn btn-primary" 
                 onClick={() => setShowConfirmModal(true)}
+                disabled={isSubmitting}
               >
                 ✅ Xác nhận tham gia
               </button>
               <button 
                 className="btn btn-secondary"
                 onClick={() => setShowFeedbackModal(true)}
+                disabled={isSubmitting}
               >
                 💬 Góp ý thời gian
               </button>
@@ -122,12 +233,57 @@ function App() {
         <div className="feedback-modal">
           <div className="modal-content">
             <h3>🎉 Xác nhận tham gia</h3>
-            <p>Bạn có chắc chắn muốn tham gia chuyến hành hương thiêng liêng này không?</p>
+            <div className="form-group">
+              <label>Họ và tên *</label>
+              <input
+                type="text"
+                value={confirmData.name}
+                onChange={(e) => handleConfirmDataChange('name', e.target.value)}
+                placeholder="Nhập họ và tên đầy đủ"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Số điện thoại *</label>
+              <input
+                type="tel"
+                value={confirmData.phone}
+                onChange={(e) => handleConfirmDataChange('phone', e.target.value)}
+                placeholder="Nhập số điện thoại"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Email</label>
+              <input
+                type="email"
+                value={confirmData.email}
+                onChange={(e) => handleConfirmDataChange('email', e.target.value)}
+                placeholder="Nhập email (tùy chọn)"
+              />
+            </div>
+            <div className="form-group">
+              <label>Lời nhắn</label>
+              <textarea
+                value={confirmData.message}
+                onChange={(e) => handleConfirmDataChange('message', e.target.value)}
+                placeholder="Lời nhắn gửi giáo chủ (tùy chọn)"
+                rows="3"
+              />
+            </div>
             <div className="modal-buttons">
-              <button className="btn btn-primary" onClick={handleConfirm}>
-                Chắc chắn! 🚀
+              <button 
+                className="btn btn-primary" 
+                onClick={handleConfirm}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Đang gửi...' : 'Chắc chắn! 🚀'}
               </button>
-              <button className="btn btn-secondary" onClick={() => setShowConfirmModal(false)}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setShowConfirmModal(false)}
+                disabled={isSubmitting}
+              >
                 Để tôi suy nghĩ thêm 🤔
               </button>
             </div>
@@ -140,16 +296,86 @@ function App() {
         <div className="feedback-modal">
           <div className="modal-content">
             <h3>💬 Góp ý thời gian</h3>
-            <textarea
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              placeholder="Chia sẻ ý kiến của bạn về thời gian, địa điểm hoặc hoạt động..."
-            />
+            <div className="form-group">
+              <label>Họ và tên *</label>
+              <input
+                type="text"
+                value={suggestData.name}
+                onChange={(e) => handleSuggestDataChange('name', e.target.value)}
+                placeholder="Nhập họ và tên đầy đủ"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Số điện thoại *</label>
+              <input
+                type="tel"
+                value={suggestData.phone}
+                onChange={(e) => handleSuggestDataChange('phone', e.target.value)}
+                placeholder="Nhập số điện thoại"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Ngày đề xuất *</label>
+              <input
+                type="text"
+                value={suggestData.suggestedDate}
+                onChange={(e) => handleSuggestDataChange('suggestedDate', e.target.value)}
+                placeholder="VD: 15-20/10/2025 hoặc cuối tuần đầu tháng 10"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Thời gian đi</label>
+              <select
+                value={suggestData.duration}
+                onChange={(e) => handleSuggestDataChange('duration', e.target.value)}
+              >
+                <option value="">Chọn thời gian</option>
+                <option value="1 ngày">1 ngày</option>
+                <option value="2 ngày 1 đêm">2 ngày 1 đêm</option>
+                <option value="3 ngày 2 đêm">3 ngày 2 đêm</option>
+                <option value="Khác">Khác</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Hoạt động mong muốn</label>
+              <textarea
+                value={suggestData.activities}
+                onChange={(e) => handleSuggestDataChange('activities', e.target.value)}
+                placeholder="VD: Tắm biển, BBQ, karaoke, chụp ảnh, thăm thú địa danh..."
+                rows="3"
+              />
+            </div>
+            <div className="form-group">
+              <label>Ngân sách dự kiến</label>
+              <select
+                value={suggestData.budget}
+                onChange={(e) => handleSuggestDataChange('budget', e.target.value)}
+              >
+                <option value="">Chọn ngân sách</option>
+                <option value="Dưới 500k">Dưới 500k</option>
+                <option value="500k - 1 triệu">500k - 1 triệu</option>
+                <option value="1 - 1.5 triệu">1 - 1.5 triệu</option>
+                <option value="1.5 - 2 triệu">1.5 - 2 triệu</option>
+                <option value="Trên 2 triệu">Trên 2 triệu</option>
+                <option value="Tùy giáo chủ">Tùy giáo chủ</option>
+              </select>
+            </div>
             <div className="modal-buttons">
-              <button className="btn btn-primary" onClick={handleFeedbackSubmit}>
-                Gửi góp ý 📤
+              <button 
+                className="btn btn-primary" 
+                onClick={handleFeedbackSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Đang gửi...' : 'Gửi góp ý 📤'}
               </button>
-              <button className="btn btn-secondary" onClick={() => setShowFeedbackModal(false)}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setShowFeedbackModal(false)}
+                disabled={isSubmitting}
+              >
                 Hủy
               </button>
             </div>
