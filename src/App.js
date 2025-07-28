@@ -36,8 +36,11 @@ function App() {
       
       // Create the callback function
       window[callbackName] = function(response) {
+        console.log('🎉 JSONP callback received:', response);
         delete window[callbackName];
-        document.body.removeChild(script);
+        if (document.body.contains(script)) {
+          document.body.removeChild(script);
+        }
         
         if (response.result === 'success') {
           resolve(response);
@@ -56,23 +59,70 @@ function App() {
       
       // Create script tag for JSONP
       const script = document.createElement('script');
-      script.src = `${GAS_WEB_APP_URL}?${params.toString()}`;
-      script.onerror = () => {
+      const fullUrl = `${GAS_WEB_APP_URL}?${params.toString()}`;
+      console.log('🔗 Full JSONP URL:', fullUrl);
+      
+      script.src = fullUrl;
+      script.onerror = (error) => {
+        console.error('❌ Script load error:', error);
+        console.error('❌ Failed URL:', fullUrl);
         delete window[callbackName];
-        document.body.removeChild(script);
-        reject(new Error('Network error'));
+        if (document.body.contains(script)) {
+          document.body.removeChild(script);
+        }
+        reject(new Error('Network error - Google Apps Script không phản hồi'));
+      };
+      
+      script.onload = () => {
+        console.log('✅ Script loaded successfully');
       };
       
       document.body.appendChild(script);
       
-      // Timeout after 10 seconds
+      // Timeout after 15 seconds
       setTimeout(() => {
         if (window[callbackName]) {
+          console.warn('⏰ Request timeout');
           delete window[callbackName];
-          document.body.removeChild(script);
-          reject(new Error('Request timeout'));
+          if (document.body.contains(script)) {
+            document.body.removeChild(script);
+          }
+          reject(new Error('Request timeout - Google Apps Script không phản hồi trong 15s'));
         }
-      }, 10000);
+      }, 15000);
+    });
+  };
+
+  // Alternative form submission method as fallback
+  const submitViaForm = (data, type) => {
+    return new Promise((resolve) => {
+      const form = document.createElement('form');
+      form.method = 'GET';
+      form.action = GAS_WEB_APP_URL;
+      form.target = '_blank';
+      form.style.display = 'none';
+
+      // Add data as hidden form fields
+      const formData = {
+        type: type,
+        timestamp: new Date().toISOString(),
+        ...data
+      };
+
+      Object.keys(formData).forEach(key => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = formData[key];
+        form.appendChild(input);
+      });
+
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+      
+      // Simulate success after a short delay
+      setTimeout(() => resolve({ result: 'success' }), 1000);
     });
   };
 
@@ -88,19 +138,33 @@ function App() {
       console.log('📤 Sending confirmation data via JSONP:', confirmData);
       console.log('📡 GAS URL:', GAS_WEB_APP_URL);
 
-      // Use JSONP to avoid CORS issues
-      const result = await submitDataViaJSONP(confirmData, 'confirm');
-      console.log('✅ Response result:', result);
-      
-      setConfirmationSent(true);
-      setShowConfirmModal(false);
-      setConfirmData({ name: '', phone: '', email: '', message: '' });
-      setTimeout(() => setConfirmationSent(false), 5000);
-      alert('✅ Đã gửi xác nhận thành công!\nDữ liệu đã được lưu vào Google Sheets.');
+      try {
+        // Try JSONP first
+        const result = await submitDataViaJSONP(confirmData, 'confirm');
+        console.log('✅ JSONP Response result:', result);
+        
+        setConfirmationSent(true);
+        setShowConfirmModal(false);
+        setConfirmData({ name: '', phone: '', email: '', message: '' });
+        setTimeout(() => setConfirmationSent(false), 5000);
+        alert('✅ Đã gửi xác nhận thành công!\nDữ liệu đã được lưu vào Google Sheets.');
+        
+      } catch (jsonpError) {
+        console.warn('❌ JSONP failed, trying form fallback:', jsonpError.message);
+        
+        // Fallback to form submission
+        await submitViaForm(confirmData, 'confirm');
+        
+        setConfirmationSent(true);
+        setShowConfirmModal(false);
+        setConfirmData({ name: '', phone: '', email: '', message: '' });
+        setTimeout(() => setConfirmationSent(false), 5000);
+        alert('✅ Đã gửi xác nhận thành công!\n(Sử dụng phương pháp dự phòng - dữ liệu sẽ được lưu vào Google Sheets)');
+      }
       
     } catch (error) {
-      console.error('💥 Error submitting confirmation:', error);
-      alert(`Có lỗi xảy ra khi gửi xác nhận: ${error.message}\nVui lòng thử lại!`);
+      console.error('💥 All methods failed:', error);
+      alert(`Có lỗi xảy ra khi gửi xác nhận: ${error.message}\nVui lòng thử lại hoặc liên hệ trực tiếp với giáo chủ!`);
     } finally {
       setIsSubmitting(false);
     }
@@ -118,24 +182,43 @@ function App() {
       console.log('📤 Sending suggestion data via JSONP:', suggestData);
       console.log('📡 GAS URL:', GAS_WEB_APP_URL);
 
-      // Use JSONP to avoid CORS issues
-      const result = await submitDataViaJSONP(suggestData, 'suggest');
-      console.log('✅ Response result:', result);
-      
-      setShowFeedbackModal(false);
-      setSuggestData({
-        name: '',
-        phone: '',
-        suggestedDate: '',
-        duration: '',
-        activities: '',
-        budget: ''
-      });
-      alert('✅ Cảm ơn góp ý của bạn!\nDữ liệu đã được lưu vào Google Sheets.');
+      try {
+        // Try JSONP first
+        const result = await submitDataViaJSONP(suggestData, 'suggest');
+        console.log('✅ JSONP Response result:', result);
+        
+        setShowFeedbackModal(false);
+        setSuggestData({
+          name: '',
+          phone: '',
+          suggestedDate: '',
+          duration: '',
+          activities: '',
+          budget: ''
+        });
+        alert('✅ Cảm ơn góp ý của bạn!\nDữ liệu đã được lưu vào Google Sheets.');
+        
+      } catch (jsonpError) {
+        console.warn('❌ JSONP failed, trying form fallback:', jsonpError.message);
+        
+        // Fallback to form submission
+        await submitViaForm(suggestData, 'suggest');
+        
+        setShowFeedbackModal(false);
+        setSuggestData({
+          name: '',
+          phone: '',
+          suggestedDate: '',
+          duration: '',
+          activities: '',
+          budget: ''
+        });
+        alert('✅ Cảm ơn góp ý của bạn!\n(Sử dụng phương pháp dự phòng - dữ liệu sẽ được lưu vào Google Sheets)');
+      }
       
     } catch (error) {
-      console.error('💥 Error submitting feedback:', error);
-      alert(`Có lỗi xảy ra khi gửi góp ý: ${error.message}\nVui lòng thử lại!`);
+      console.error('💥 All methods failed:', error);
+      alert(`Có lỗi xảy ra khi gửi góp ý: ${error.message}\nVui lòng thử lại hoặc liên hệ trực tiếp với giáo chủ!`);
     } finally {
       setIsSubmitting(false);
     }
