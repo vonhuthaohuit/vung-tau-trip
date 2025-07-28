@@ -45,30 +45,18 @@ function doPost(e) {
     Logger.log('Data inserted successfully');
     
     // Return success response with CORS headers
-    const output = ContentService
+    return ContentService
       .createTextOutput(JSON.stringify({ 'result': 'success', 'message': 'Data saved successfully' }))
       .setMimeType(ContentService.MimeType.JSON);
-    
-    output.setHeader('Access-Control-Allow-Origin', '*');
-    output.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    output.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    
-    return output;
       
   } catch (error) {
     Logger.log('Error in doPost: ' + error.toString());
     Logger.log('Error stack: ' + error.stack);
     
-    // Return error response with CORS headers
-    const errorOutput = ContentService
+    // Return error response
+    return ContentService
       .createTextOutput(JSON.stringify({ 'result': 'error', 'error': error.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
-    
-    errorOutput.setHeader('Access-Control-Allow-Origin', '*');
-    errorOutput.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    errorOutput.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    
-    return errorOutput;
   }
 }
 
@@ -77,41 +65,55 @@ function doGet(e) {
     Logger.log('GET request received');
     Logger.log('Parameters: ' + JSON.stringify(e.parameter));
     
-    // Return basic response
-    const getOutput = ContentService
+    // Check if this is a data submission request
+    if (e.parameter.type && (e.parameter.type === 'confirm' || e.parameter.type === 'suggest')) {
+      Logger.log('Processing data submission via GET');
+      
+      // Get the active spreadsheet
+      const spreadsheetId = '1k6FC5cA7aZMtxfMK5347VW8PkJN7tS5pAKRmwrIulKo';
+      Logger.log('Opening spreadsheet: ' + spreadsheetId);
+      
+      const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+      Logger.log('Spreadsheet opened successfully');
+      
+      // Get the appropriate sheet based on form type
+      let sheet;
+      if (e.parameter.type === 'confirm') {
+        sheet = spreadsheet.getSheetByName('Xác nhận tham gia') || spreadsheet.insertSheet('Xác nhận tham gia');
+        Logger.log('Using confirmation sheet');
+      } else if (e.parameter.type === 'suggest') {
+        sheet = spreadsheet.getSheetByName('Góp ý thời gian') || spreadsheet.insertSheet('Góp ý thời gian');
+        Logger.log('Using suggestion sheet');
+      }
+      
+      // Prepare data for insertion
+      const rowData = prepareRowDataFromParams(e.parameter);
+      Logger.log('Row data prepared: ' + JSON.stringify(rowData));
+      
+      // Insert data into sheet
+      sheet.appendRow(rowData);
+      Logger.log('Data inserted successfully');
+      
+      // Return success response as JSONP to avoid CORS
+      const callback = e.parameter.callback || 'callback';
+      return ContentService
+        .createTextOutput(callback + '(' + JSON.stringify({ result: 'success', message: 'Data saved successfully' }) + ')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    
+    // Return basic response for testing
+    return ContentService
       .createTextOutput('React-Google Sheets integration is working!')
       .setMimeType(ContentService.MimeType.TEXT);
-    
-    getOutput.setHeader('Access-Control-Allow-Origin', '*');
-    
-    return getOutput;
       
   } catch (error) {
     Logger.log('Error in doGet: ' + error.toString());
+    Logger.log('Error stack: ' + error.stack);
+    
+    const callback = e.parameter.callback || 'callback';
     return ContentService
-      .createTextOutput('Error: ' + error.toString())
-      .setMimeType(ContentService.MimeType.TEXT);
-  }
-}
-
-// Handle OPTIONS requests for CORS preflight
-function doOptions() {
-  try {
-    Logger.log('OPTIONS request received for CORS preflight');
-    
-    const optionsOutput = ContentService
-      .createTextOutput('')
-      .setMimeType(ContentService.MimeType.TEXT);
-    
-    optionsOutput.setHeader('Access-Control-Allow-Origin', '*');
-    optionsOutput.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    optionsOutput.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    optionsOutput.setHeader('Access-Control-Max-Age', '86400');
-    
-    return optionsOutput;
-  } catch (error) {
-    Logger.log('Error in doOptions: ' + error.toString());
-    return ContentService.createTextOutput('');
+      .createTextOutput(callback + '(' + JSON.stringify({ result: 'error', error: error.toString() }) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
 }
 
@@ -151,6 +153,47 @@ function prepareRowData(data) {
     return [];
   } catch (error) {
     Logger.log('Error in prepareRowData: ' + error.toString());
+    throw error;
+  }
+}
+
+// Prepare row data from URL parameters (for GET requests)
+function prepareRowDataFromParams(params) {
+  try {
+    Logger.log('Preparing row data from params for type: ' + params.type);
+    
+    const timestamp = params.timestamp ? new Date(params.timestamp) : new Date();
+    const formattedDate = Utilities.formatDate(timestamp, 'Asia/Ho_Chi_Minh', 'dd/MM/yyyy HH:mm:ss');
+    Logger.log('Formatted date: ' + formattedDate);
+    
+    if (params.type === 'confirm') {
+      const rowData = [
+        formattedDate,           // Thời gian gửi
+        params.name || '',       // Họ và tên
+        params.phone || '',      // Số điện thoại
+        params.email || '',      // Email
+        params.message || ''     // Lời nhắn
+      ];
+      Logger.log('Confirmation row data: ' + JSON.stringify(rowData));
+      return rowData;
+    } else if (params.type === 'suggest') {
+      const rowData = [
+        formattedDate,           // Thời gian gửi
+        params.name || '',       // Họ và tên
+        params.phone || '',      // Số điện thoại
+        params.suggestedDate || '', // Ngày đề xuất
+        params.duration || '',   // Thời gian đi
+        params.activities || '', // Hoạt động mong muốn
+        params.budget || ''      // Ngân sách dự kiến
+      ];
+      Logger.log('Suggestion row data: ' + JSON.stringify(rowData));
+      return rowData;
+    }
+    
+    Logger.log('Unknown data type, returning empty array');
+    return [];
+  } catch (error) {
+    Logger.log('Error in prepareRowDataFromParams: ' + error.toString());
     throw error;
   }
 }

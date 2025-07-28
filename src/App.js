@@ -28,36 +28,51 @@ function App() {
   // Google Apps Script Web App URL - Replace with your actual URL
   const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyUm6yNoO8uoXfqJju52OkuGyTPBHPQnBfbsQE8CIPR106WA7EqpA3E5FgNjq1uxvDx/exec';
 
-  // Alternative method using form submission to avoid CORS
-  const submitFormData = (data, type) => {
+  // JSONP method to avoid CORS issues
+  const submitDataViaJSONP = (data, type) => {
     return new Promise((resolve, reject) => {
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = GAS_WEB_APP_URL;
-      form.target = '_blank'; // Opens in new tab
-      form.style.display = 'none';
-
-      // Add data as hidden form fields
-      const formData = {
+      // Create a unique callback name
+      const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
+      
+      // Create the callback function
+      window[callbackName] = function(response) {
+        delete window[callbackName];
+        document.body.removeChild(script);
+        
+        if (response.result === 'success') {
+          resolve(response);
+        } else {
+          reject(new Error(response.error || 'Unknown error'));
+        }
+      };
+      
+      // Prepare data with callback parameter
+      const params = new URLSearchParams({
         type: type,
         timestamp: new Date().toISOString(),
+        callback: callbackName,
         ...data
-      };
-
-      Object.keys(formData).forEach(key => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = formData[key];
-        form.appendChild(input);
       });
-
-      document.body.appendChild(form);
-      form.submit();
-      document.body.removeChild(form);
       
-      // Simulate success after a short delay
-      setTimeout(() => resolve({ result: 'success' }), 1000);
+      // Create script tag for JSONP
+      const script = document.createElement('script');
+      script.src = `${GAS_WEB_APP_URL}?${params.toString()}`;
+      script.onerror = () => {
+        delete window[callbackName];
+        document.body.removeChild(script);
+        reject(new Error('Network error'));
+      };
+      
+      document.body.appendChild(script);
+      
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        if (window[callbackName]) {
+          delete window[callbackName];
+          document.body.removeChild(script);
+          reject(new Error('Request timeout'));
+        }
+      }, 10000);
     });
   };
 
@@ -70,48 +85,22 @@ function App() {
     setIsSubmitting(true);
     
     try {
-      const dataToSend = {
-        type: 'confirm',
-        timestamp: new Date().toISOString(),
-        ...confirmData
-      };
+      console.log('📤 Sending confirmation data via JSONP:', confirmData);
+      console.log('📡 GAS URL:', GAS_WEB_APP_URL);
 
-      // Try fetch first, fallback to form submission if CORS fails
-      try {
-        const response = await fetch(GAS_WEB_APP_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(dataToSend)
-        });
-
-        const result = await response.json();
-        
-        if (result.result === 'success') {
-          setConfirmationSent(true);
-          setShowConfirmModal(false);
-          setConfirmData({ name: '', phone: '', email: '', message: '' });
-          setTimeout(() => setConfirmationSent(false), 5000);
-        } else {
-          throw new Error(result.error || 'Có lỗi xảy ra');
-        }
-      } catch (corsError) {
-        console.log('CORS error, using fallback method:', corsError);
-        
-        // Fallback: Use form submission
-        await submitFormData(confirmData, 'confirm');
-        
-        setConfirmationSent(true);
-        setShowConfirmModal(false);
-        setConfirmData({ name: '', phone: '', email: '', message: '' });
-        setTimeout(() => setConfirmationSent(false), 5000);
-        
-        alert('✅ Đã gửi xác nhận thành công!\nDữ liệu đã được lưu vào Google Sheets.');
-      }
+      // Use JSONP to avoid CORS issues
+      const result = await submitDataViaJSONP(confirmData, 'confirm');
+      console.log('✅ Response result:', result);
+      
+      setConfirmationSent(true);
+      setShowConfirmModal(false);
+      setConfirmData({ name: '', phone: '', email: '', message: '' });
+      setTimeout(() => setConfirmationSent(false), 5000);
+      alert('✅ Đã gửi xác nhận thành công!\nDữ liệu đã được lưu vào Google Sheets.');
+      
     } catch (error) {
-      console.error('Error submitting confirmation:', error);
-      alert('Có lỗi xảy ra khi gửi xác nhận. Vui lòng thử lại!');
+      console.error('💥 Error submitting confirmation:', error);
+      alert(`Có lỗi xảy ra khi gửi xác nhận: ${error.message}\nVui lòng thử lại!`);
     } finally {
       setIsSubmitting(false);
     }
@@ -126,59 +115,27 @@ function App() {
     setIsSubmitting(true);
     
     try {
-      const dataToSend = {
-        type: 'suggest',
-        timestamp: new Date().toISOString(),
-        ...suggestData
-      };
+      console.log('📤 Sending suggestion data via JSONP:', suggestData);
+      console.log('📡 GAS URL:', GAS_WEB_APP_URL);
 
-      // Try fetch first, fallback to form submission if CORS fails
-      try {
-        const response = await fetch(GAS_WEB_APP_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(dataToSend)
-        });
-
-        const result = await response.json();
-        
-        if (result.result === 'success') {
-          setShowFeedbackModal(false);
-          setSuggestData({
-            name: '',
-            phone: '',
-            suggestedDate: '',
-            duration: '',
-            activities: '',
-            budget: ''
-          });
-          alert('Cảm ơn góp ý của bạn! Đã được lưu vào hệ thống 🙏');
-        } else {
-          throw new Error(result.error || 'Có lỗi xảy ra');
-        }
-      } catch (corsError) {
-        console.log('CORS error, using fallback method:', corsError);
-        
-        // Fallback: Use form submission
-        await submitFormData(suggestData, 'suggest');
-        
-        setShowFeedbackModal(false);
-        setSuggestData({
-          name: '',
-          phone: '',
-          suggestedDate: '',
-          duration: '',
-          activities: '',
-          budget: ''
-        });
-        
-        alert('✅ Cảm ơn góp ý của bạn!\nDữ liệu đã được lưu vào Google Sheets.');
-      }
+      // Use JSONP to avoid CORS issues
+      const result = await submitDataViaJSONP(suggestData, 'suggest');
+      console.log('✅ Response result:', result);
+      
+      setShowFeedbackModal(false);
+      setSuggestData({
+        name: '',
+        phone: '',
+        suggestedDate: '',
+        duration: '',
+        activities: '',
+        budget: ''
+      });
+      alert('✅ Cảm ơn góp ý của bạn!\nDữ liệu đã được lưu vào Google Sheets.');
+      
     } catch (error) {
-      console.error('Error submitting feedback:', error);
-      alert('Có lỗi xảy ra khi gửi góp ý. Vui lòng thử lại!');
+      console.error('💥 Error submitting feedback:', error);
+      alert(`Có lỗi xảy ra khi gửi góp ý: ${error.message}\nVui lòng thử lại!`);
     } finally {
       setIsSubmitting(false);
     }
