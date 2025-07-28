@@ -1,47 +1,21 @@
-// Google Apps Script để xử lý requests từ React App - FIXED VERSION
+// Google Apps Script để xử lý requests từ React App
 // Copy code này vào Google Apps Script và deploy as web app
-
-function doOptions(e) {
-  const output = ContentService.createTextOutput('');
-  output.setMimeType(ContentService.MimeType.TEXT);
-  
-  // Set CORS headers individually to avoid chaining issues
-  output.setHeader('Access-Control-Allow-Origin', '*');
-  output.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  output.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  output.setHeader('Access-Control-Max-Age', '3600');
-  
-  return output;
-}
 
 function doPost(e) {
   try {
-    Logger.log('POST request received');
+    Logger.log('POST request received from React App');
+    Logger.log('Request method: ' + e.method);
+    Logger.log('Content type: ' + e.contentType);
+    Logger.log('Post data: ' + e.postData.contents);
     
-    let data;
-    
-    // Handle both JSON data (from fetch) and form data (from form submission)
-    if (e.postData && e.postData.contents) {
-      try {
-        // Try to parse as JSON first
-        data = JSON.parse(e.postData.contents);
-        Logger.log('Parsed JSON data: ' + JSON.stringify(data));
-      } catch (jsonError) {
-        Logger.log('Not JSON data, using form parameters');
-        // If JSON parsing fails, use form parameters
-        data = e.parameter;
-        Logger.log('Form data: ' + JSON.stringify(data));
-      }
-    } else {
-      // Use form parameters
-      data = e.parameter;
-      Logger.log('Using form parameters: ' + JSON.stringify(data));
+    // Check if post data exists
+    if (!e.postData || !e.postData.contents) {
+      throw new Error('No post data received');
     }
     
-    // Validate required data
-    if (!data.type || !data.name || !data.phone) {
-      throw new Error('Missing required fields: type, name, or phone');
-    }
+    // Parse JSON data from the request
+    const data = JSON.parse(e.postData.contents);
+    Logger.log('Parsed data: ' + JSON.stringify(data));
     
     // Get the active spreadsheet
     const spreadsheetId = '1k6FC5cA7aZMtxfMK5347VW8PkJN7tS5pAKRmwrIulKo';
@@ -70,14 +44,11 @@ function doPost(e) {
     sheet.appendRow(rowData);
     Logger.log('Data inserted successfully');
     
-    // Create response with CORS headers - Set headers separately to avoid chaining issues
-    const responseText = JSON.stringify({ 
-      'result': 'success', 
-      'message': 'Data saved successfully' 
-    });
+    // Return success response with CORS headers
+    const output = ContentService
+      .createTextOutput(JSON.stringify({ 'result': 'success', 'message': 'Data saved successfully' }))
+      .setMimeType(ContentService.MimeType.JSON);
     
-    const output = ContentService.createTextOutput(responseText);
-    output.setMimeType(ContentService.MimeType.JSON);
     output.setHeader('Access-Control-Allow-Origin', '*');
     output.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     output.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -88,19 +59,16 @@ function doPost(e) {
     Logger.log('Error in doPost: ' + error.toString());
     Logger.log('Error stack: ' + error.stack);
     
-    // Create error response with CORS headers
-    const errorText = JSON.stringify({ 
-      'result': 'error', 
-      'error': error.toString() 
-    });
+    // Return error response with CORS headers
+    const errorOutput = ContentService
+      .createTextOutput(JSON.stringify({ 'result': 'error', 'error': error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
     
-    const output = ContentService.createTextOutput(errorText);
-    output.setMimeType(ContentService.MimeType.JSON);
-    output.setHeader('Access-Control-Allow-Origin', '*');
-    output.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    output.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    errorOutput.setHeader('Access-Control-Allow-Origin', '*');
+    errorOutput.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    errorOutput.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     
-    return output;
+    return errorOutput;
   }
 }
 
@@ -109,23 +77,41 @@ function doGet(e) {
     Logger.log('GET request received');
     Logger.log('Parameters: ' + JSON.stringify(e.parameter));
     
-    // Create response with CORS headers
-    const output = ContentService.createTextOutput('React-Google Sheets integration is working!');
-    output.setMimeType(ContentService.MimeType.TEXT);
-    output.setHeader('Access-Control-Allow-Origin', '*');
-    output.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    output.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    // Return basic response
+    const getOutput = ContentService
+      .createTextOutput('React-Google Sheets integration is working!')
+      .setMimeType(ContentService.MimeType.TEXT);
     
-    return output;
+    getOutput.setHeader('Access-Control-Allow-Origin', '*');
+    
+    return getOutput;
       
   } catch (error) {
     Logger.log('Error in doGet: ' + error.toString());
+    return ContentService
+      .createTextOutput('Error: ' + error.toString())
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+// Handle OPTIONS requests for CORS preflight
+function doOptions() {
+  try {
+    Logger.log('OPTIONS request received for CORS preflight');
     
-    const output = ContentService.createTextOutput('Error: ' + error.toString());
-    output.setMimeType(ContentService.MimeType.TEXT);
-    output.setHeader('Access-Control-Allow-Origin', '*');
+    const optionsOutput = ContentService
+      .createTextOutput('')
+      .setMimeType(ContentService.MimeType.TEXT);
     
-    return output;
+    optionsOutput.setHeader('Access-Control-Allow-Origin', '*');
+    optionsOutput.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    optionsOutput.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    optionsOutput.setHeader('Access-Control-Max-Age', '86400');
+    
+    return optionsOutput;
+  } catch (error) {
+    Logger.log('Error in doOptions: ' + error.toString());
+    return ContentService.createTextOutput('');
   }
 }
 
@@ -273,6 +259,4 @@ function testReactIntegration() {
   } catch (error) {
     Logger.log('Error in testReactIntegration: ' + error.toString());
   }
-}
-
- 
+} 
