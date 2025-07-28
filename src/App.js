@@ -4,6 +4,8 @@ import './index.css';
 function App() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
   const [confirmationSent, setConfirmationSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -28,6 +30,12 @@ function App() {
   // Google Apps Script Web App URL - Replace with your actual URL
   const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyUm6yNoO8uoXfqJju52OkuGyTPBHPQnBfbsQE8CIPR106WA7EqpA3E5FgNjq1uxvDx/exec';
 
+  // Show notification modal
+  const showNotification = (message) => {
+    setNotificationMessage(message);
+    setShowNotificationModal(true);
+  };
+
   // JSONP method to avoid CORS issues
   const submitDataViaJSONP = (data, type) => {
     return new Promise((resolve, reject) => {
@@ -36,7 +44,6 @@ function App() {
       
       // Create the callback function
       window[callbackName] = function(response) {
-        console.log('🎉 JSONP callback received:', response);
         delete window[callbackName];
         if (document.body.contains(script)) {
           document.body.removeChild(script);
@@ -59,22 +66,13 @@ function App() {
       
       // Create script tag for JSONP
       const script = document.createElement('script');
-      const fullUrl = `${GAS_WEB_APP_URL}?${params.toString()}`;
-      console.log('🔗 Full JSONP URL:', fullUrl);
-      
-      script.src = fullUrl;
-      script.onerror = (error) => {
-        console.error('❌ Script load error:', error);
-        console.error('❌ Failed URL:', fullUrl);
+      script.src = `${GAS_WEB_APP_URL}?${params.toString()}`;
+      script.onerror = () => {
         delete window[callbackName];
         if (document.body.contains(script)) {
           document.body.removeChild(script);
         }
-        reject(new Error('Network error - Google Apps Script không phản hồi'));
-      };
-      
-      script.onload = () => {
-        console.log('✅ Script loaded successfully');
+        reject(new Error('Không thể kết nối đến Google Sheets'));
       };
       
       document.body.appendChild(script);
@@ -82,12 +80,11 @@ function App() {
       // Timeout after 15 seconds
       setTimeout(() => {
         if (window[callbackName]) {
-          console.warn('⏰ Request timeout');
           delete window[callbackName];
           if (document.body.contains(script)) {
             document.body.removeChild(script);
           }
-          reject(new Error('Request timeout - Google Apps Script không phản hồi trong 15s'));
+          reject(new Error('Timeout - Vui lòng thử lại'));
         }
       }, 15000);
     });
@@ -102,7 +99,6 @@ function App() {
       form.target = '_blank';
       form.style.display = 'none';
 
-      // Add data as hidden form fields
       const formData = {
         type: type,
         timestamp: new Date().toISOString(),
@@ -121,37 +117,30 @@ function App() {
       form.submit();
       document.body.removeChild(form);
       
-      // Simulate success after a short delay
       setTimeout(() => resolve({ result: 'success' }), 1000);
     });
   };
 
   const handleConfirm = async () => {
     if (!confirmData.name || !confirmData.phone) {
-      alert('Vui lòng điền đầy đủ họ tên và số điện thoại!');
+      showNotification('Vui lòng điền đầy đủ họ tên và số điện thoại!');
       return;
     }
 
     setIsSubmitting(true);
     
     try {
-      console.log('📤 Sending confirmation data via JSONP:', confirmData);
-      console.log('📡 GAS URL:', GAS_WEB_APP_URL);
-
       try {
         // Try JSONP first
-        const result = await submitDataViaJSONP(confirmData, 'confirm');
-        console.log('✅ JSONP Response result:', result);
+        await submitDataViaJSONP(confirmData, 'confirm');
         
         setConfirmationSent(true);
         setShowConfirmModal(false);
         setConfirmData({ name: '', phone: '', email: '', message: '' });
         setTimeout(() => setConfirmationSent(false), 5000);
-        alert('✅ Đã gửi xác nhận thành công!\nDữ liệu đã được lưu vào Google Sheets.');
+        showNotification('✅ Đã gửi xác nhận thành công!\nDữ liệu đã được lưu vào Google Sheets.');
         
       } catch (jsonpError) {
-        console.warn('❌ JSONP failed, trying form fallback:', jsonpError.message);
-        
         // Fallback to form submission
         await submitViaForm(confirmData, 'confirm');
         
@@ -159,12 +148,11 @@ function App() {
         setShowConfirmModal(false);
         setConfirmData({ name: '', phone: '', email: '', message: '' });
         setTimeout(() => setConfirmationSent(false), 5000);
-        alert('✅ Đã gửi xác nhận thành công!\n(Sử dụng phương pháp dự phòng - dữ liệu sẽ được lưu vào Google Sheets)');
+        showNotification('✅ Đã gửi xác nhận thành công!\nDữ liệu đã được lưu vào Google Sheets.');
       }
       
     } catch (error) {
-      console.error('💥 All methods failed:', error);
-      alert(`Có lỗi xảy ra khi gửi xác nhận: ${error.message}\nVui lòng thử lại hoặc liên hệ trực tiếp với giáo chủ!`);
+      showNotification(`Có lỗi xảy ra: ${error.message}\nVui lòng thử lại hoặc liên hệ trực tiếp với giáo chủ!`);
     } finally {
       setIsSubmitting(false);
     }
@@ -172,20 +160,16 @@ function App() {
 
   const handleFeedbackSubmit = async () => {
     if (!suggestData.name || !suggestData.phone || !suggestData.suggestedDate) {
-      alert('Vui lòng điền đầy đủ họ tên, số điện thoại và ngày đề xuất!');
+      showNotification('Vui lòng điền đầy đủ họ tên, số điện thoại và ngày đề xuất!');
       return;
     }
 
     setIsSubmitting(true);
     
     try {
-      console.log('📤 Sending suggestion data via JSONP:', suggestData);
-      console.log('📡 GAS URL:', GAS_WEB_APP_URL);
-
       try {
         // Try JSONP first
-        const result = await submitDataViaJSONP(suggestData, 'suggest');
-        console.log('✅ JSONP Response result:', result);
+        await submitDataViaJSONP(suggestData, 'suggest');
         
         setShowFeedbackModal(false);
         setSuggestData({
@@ -196,11 +180,9 @@ function App() {
           activities: '',
           budget: ''
         });
-        alert('✅ Cảm ơn góp ý của bạn!\nDữ liệu đã được lưu vào Google Sheets.');
+        showNotification('✅ Cảm ơn góp ý của bạn!\nDữ liệu đã được lưu vào Google Sheets.');
         
       } catch (jsonpError) {
-        console.warn('❌ JSONP failed, trying form fallback:', jsonpError.message);
-        
         // Fallback to form submission
         await submitViaForm(suggestData, 'suggest');
         
@@ -213,12 +195,11 @@ function App() {
           activities: '',
           budget: ''
         });
-        alert('✅ Cảm ơn góp ý của bạn!\n(Sử dụng phương pháp dự phòng - dữ liệu sẽ được lưu vào Google Sheets)');
+        showNotification('✅ Cảm ơn góp ý của bạn!\nDữ liệu đã được lưu vào Google Sheets.');
       }
       
     } catch (error) {
-      console.error('💥 All methods failed:', error);
-      alert(`Có lỗi xảy ra khi gửi góp ý: ${error.message}\nVui lòng thử lại hoặc liên hệ trực tiếp với giáo chủ!`);
+      showNotification(`Có lỗi xảy ra: ${error.message}\nVui lòng thử lại hoặc liên hệ trực tiếp với giáo chủ!`);
     } finally {
       setIsSubmitting(false);
     }
@@ -342,7 +323,7 @@ function App() {
           <div className="modal-content">
             <h3>🎉 Xác nhận tham gia</h3>
             <div className="form-group">
-              <label>Họ và tên *</label>
+              <label>Họ và tên <span style={{color: 'red'}}>*</span></label>
               <input
                 type="text"
                 value={confirmData.name}
@@ -352,7 +333,7 @@ function App() {
               />
             </div>
             <div className="form-group">
-              <label>Số điện thoại *</label>
+              <label>Số điện thoại <span style={{color: 'red'}}>*</span></label>
               <input
                 type="tel"
                 value={confirmData.phone}
@@ -485,6 +466,26 @@ function App() {
                 disabled={isSubmitting}
               >
                 Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Modal */}
+      {showNotificationModal && (
+        <div className="feedback-modal">
+          <div className="modal-content">
+            <h3>📢 Thông báo</h3>
+            <div style={{ whiteSpace: 'pre-line', lineHeight: '1.6', marginBottom: '20px' }}>
+              {notificationMessage}
+            </div>
+            <div className="modal-buttons">
+              <button 
+                className="btn btn-primary" 
+                onClick={() => setShowNotificationModal(false)}
+              >
+                OK
               </button>
             </div>
           </div>
