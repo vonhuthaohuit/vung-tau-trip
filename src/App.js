@@ -5,6 +5,7 @@ function App() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [showImagePreview, setShowImagePreview] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [confirmationSent, setConfirmationSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,6 +30,9 @@ function App() {
 
   // Google Apps Script Web App URL - Replace with your actual URL
   const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyUm6yNoO8uoXfqJju52OkuGyTPBHPQnBfbsQE8CIPR106WA7EqpA3E5FgNjq1uxvDx/exec';
+  
+  // URL ảnh demo - có thể thay đổi bất kỳ URL ảnh nào
+  const demoImageUrl = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80';
 
   // Show notification modal
   const showNotification = (message) => {
@@ -301,6 +305,14 @@ function App() {
               >
                 💬 Góp ý thời gian
               </button>
+              <button 
+                className="btn btn-secondary"
+                onClick={() => setShowImagePreview(true)}
+                disabled={isSubmitting}
+                style={{ marginTop: '10px' }}
+              >
+                📷 Xem ảnh demo
+              </button>
             </div>
             
             {confirmationSent && (
@@ -488,6 +500,105 @@ function App() {
                 OK
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {showImagePreview && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            zIndex: 10000,
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowImagePreview(false);
+            }
+          }}
+        >
+          {/* Header */}
+          <div style={{
+            padding: '16px 20px',
+            backgroundColor: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <h3 style={{ margin: 0, fontSize: '18px' }}>📷 Image Preview Demo</h3>
+            <button
+              onClick={() => setShowImagePreview(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '24px',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                color: '#333'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Iframe Container */}
+          <div style={{
+            flex: 1,
+            position: 'relative',
+            backgroundColor: '#000',
+            overflow: 'hidden'
+          }}>
+            <iframe
+              srcDoc={`
+                <!DOCTYPE html>
+                <html>
+                  <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                      * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                      }
+                      body {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        min-height: 100vh;
+                        background: #1a1a1a;
+                        overflow: hidden;
+                      }
+                      img {
+                        max-width: 100%;
+                        max-height: 100vh;
+                        width: auto;
+                        height: auto;
+                        object-fit: contain;
+                        display: block;
+                      }
+                    </style>
+                  </head>
+                  <body>
+                    <img src="${demoImageUrl}" alt="Preview Image" />
+                  </body>
+                </html>
+              `}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none'
+              }}
+              title="Image Preview"
+              sandbox="allow-same-origin"
+            />
           </div>
         </div>
       )}
